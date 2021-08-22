@@ -1,0 +1,268 @@
+---
+title: "New York Airbnb Listings Analysis"
+author: "Robin Collis"
+date: "December 2019"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    
+---
+
+```{r Load library, echo=FALSE, include=FALSE, message=FALSE, warning=FALSE}
+
+# Creating a vector of packages used within.  
+packages <- c('anytime',
+              'caTools','chron', 'caret', 'corrplot', 'cowplot',
+              'DMwR2','doParallel','dplyr',
+              'e1071', 'extrafont',
+              'ggplot2','gridExtra', 'GGally', 'glmnet',
+              'here',
+              'janitor',
+              'knitr', 'kableExtra',
+              'lme4','lubridate', 'leaflet',
+              'MASS',
+              'neuralnet', 'nnet',
+              'randomForest','readr', 'readxl','rlang','rpart','rpart.plot', 'RColorBrewer', 'reshape2',
+              'stats',
+              'tidyverse',
+              'scales'
+              )
+# Checking for package installations on the system and installing if not found.
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}
+# Including the packages for use.
+for(package in packages){
+  library(package, character.only = TRUE)
+}
+#Ensure wd is set to current location by using here()
+setwd(here::here())
+
+```
+
+# **Overview**
+
+For this assignment I have chosen to utilise data available through 'Inside Airbnb', to aid individuals who are looking to invest in a property in New York with the view of renting it out through the Airbnb platform. The information in this report would aid in answering questions such as:
+
+* "How many listings are in my neighbourhood and where are they?"
+* "How much are hosts making from renting to tourists (compare that to long-term rentals)?"
+* "How many houses and apartments are being rented out frequently to tourists and not to long-term residents?"
+
+Inside Airbnb is an independent, non-commercial set of tools and data that allows you to explore how Airbnb is really being used in cities around the world. By utilsing this data the target audience of this report would be able to utilise key metrics to see how Airbnb is being used to compete with the residential housing market. 
+
+Inside Airbnb data is publicly available at [Inside Airbnb](http://www.insideairbnb.com) where comprehensive data on the Airbnb market is available for most cities globally. The figure below provides an overview of the data available in the listings data set for New York city 
+
+
+```{r Load NY listings, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE, fig.width=15, fig.height=10}
+
+# Load NY listings csv file
+airbnb_description <- read_csv("description.csv", col_names = TRUE)
+
+# Convert to DF
+df_airbnb_description <- data.frame(airbnb_description)
+
+df_airbnb_description %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+
+# **Data Preperation**
+
+```{r Description file, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+# Load airbnb description csv file
+ny_airbnb_listings <- read_csv("newyork_airbnb_listings.csv", col_names = TRUE)
+
+```
+
+
+```{r Overview of the data, echo=TRUE, include=TRUE}
+
+# Take a look at the data
+str(ny_airbnb_listings)
+
+summary(ny_airbnb_listings)
+
+head(ny_airbnb_listings)
+
+```
+
+
+# **Chart Characteristics Template**
+
+```{r Define personal chart attributes, echo=TRUE, include=TRUE}
+
+# Load windows font calibra
+windowsFonts("Calibra" = windowsFont("Calibra"))
+
+# Create RC chart attributes
+rc_chartattributes1 <- theme_bw() +
+                        theme(text=element_text(family="Calibra")) +
+                        theme(panel.border = element_blank(),
+                              panel.grid.major = element_blank(),
+                              panel.grid.minor = element_blank(),
+                              axis.line = element_line(colour = "gray"),
+                              axis.ticks.x = element_blank(),
+                              axis.ticks.y = element_blank(),
+                              plot.title = element_text(color = "black", size = 28, face = "bold"),
+                              plot.subtitle = element_text(color = "gray45", size = 16),
+                              plot.caption = element_text(color = "gray45", size = 12, face = "italic", hjust = 0),
+                              legend.position="bottom")
+
+```
+
+
+# **Chart 1: Rooms by Type by Neighbourhood**
+
+```{r Number of rooms by type by neighbourhood, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE, fig.width=15, fig.height=10}
+
+# Group data by neighbourhood group and room type 
+ny_airbnb_listings_room_number <- ny_airbnb_listings %>%
+    group_by(neighbourhood_group, room_type) %>%
+    tally
+
+# Number of rooms by type by neighbourhood
+bar_chart_nh_room_type <- ggplot(data = ny_airbnb_listings_room_number) +
+                                  geom_bar(aes(x = neighbourhood_group, y = n, group = room_type, fill = room_type), stat="identity", alpha = 1) + 
+                                  labs(title = "New York Airbnb room listings by neighbourhood", 
+                                      subtitle = "Manhatten has the most rooms listed with c.21,000, with a majority being 'Entire rooms/apts'", 
+                                      caption = "Source: http://insideairbnb.com/get-the-data.html",
+                                      x = "Neighbourhood group", 
+                                      y = "Number of rooms",
+                                      fill = "Room type") + 
+                                  scale_y_continuous(labels = comma) +
+                                  scale_color_manual(values = c("#173F5F", "#3CAEA3", "#F6D55C", "#ED553B")) +
+                                  scale_fill_manual(values = c("#173F5F", "#3CAEA3", "#F6D55C", "#ED553B")) +
+                                  rc_chartattributes1
+               
+bar_chart_nh_room_type
+
+```
+
+**Explanation:**
+
+* The chart presented above shows all Airbnb listings in New York by room type and Neighbourhood group
+* There are 5 Neighbourhood groups in New York, being the Bronx, Brooklyn, Manhatten, Queens and Staten Island
+* There are 4 room type classifications in New York, being 'Entire home/apt', 'Hotel room', 'Private room', and 'Shared room'
+
+**Key Insights:**
+
+* Manhatten has the most listing in New York with c. 21,183, followed by Brooklyn with 19,856
+* Staten Island has the fewest listings with only 359
+* In Manhatten, the most popular room listing type is 'Entire home/apt' with 12,828, followed by 'Private room' with 7,559
+* Across all of New York there are few listings for either 'Hotel rooms' or 'Shared rooms'
+* Whilst demand is not known, there may be an opportunity in providing a room listing that is a 'Shared room' to cater to what may an under served market
+* In addition, Bronx and Queens, which have much fewer listings than both Brooklyn and Manhatten, may represent good opportunities given there proximity to central New York
+
+
+
+# **Chart 2: Room Price Distribution by Type by Neighbourhood**
+
+```{r Density plot of price distributions by neighbourhood group, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE, fig.width=15, fig.height=10}
+
+# Average room price by group_neighbourhood
+ny_airbnb_listings_nh_mean <- ny_airbnb_listings %>%
+    group_by(neighbourhood_group) %>%
+    summarise(price = round(mean(price), 2))
+
+# Density plot of room price by type by neighbourhood
+density_price_nh <- ggplot(data = ny_airbnb_listings) +
+                            geom_density(aes(x = price, color = room_type, fill = room_type), position = "identity", bins = 40, alpha = 0.3) +
+                            labs(title = "Distribution of New York neighbourhood prices by room type", 
+                                        subtitle = "Manhattan exhibits the highest average price, driven by having a greater mix of 'entire room/apt' type of rooms", 
+                                        caption = "Source: http://insideairbnb.com/get-the-data.html",
+                                        x = "Price (Log10 transformation)", 
+                                        y = "Density",
+                                        color = "Type of room",
+                                        fill = "Type of room") + 
+                            scale_color_manual(values = c("#173F5F", "#3CAEA3", "#F6D55C", "#ED553B")) +
+                            scale_fill_manual(values = c("#173F5F", "#3CAEA3", "#F6D55C", "#ED553B")) +
+                            scale_x_log10() +
+                            geom_vline(data = ny_airbnb_listings_nh_mean, aes(xintercept = price), linetype="dashed", color = "gray45") +
+                            geom_text(data = ny_airbnb_listings_nh_mean,y = 3, aes(x = price + 1400, label = paste("Mean  = ",price)), color = "gray45", size = 4) +
+                            facet_wrap(~neighbourhood_group, nrow=1) +
+                            rc_chartattributes1
+
+density_price_nh
+
+```
+
+**Explanation:**
+
+* The chart presented above shows the distribution of Airbnb listing prices in New York by room type and Neighbourhood group
+* There are 5 Neighbourhood groups in New York, being the Bronx, Brooklyn, Manhatten, Queens and Staten Island
+* There are 4 room type classifications in New York, being 'Entire home/apt', 'Hotel room', 'Private room', and 'Shared room'
+* The x-axis has been transformed to a log10 given there are a few outliers which command a very high price per night
+* The density distributions per room type/neighbourhood show the spread in prices for that category
+* In addition, the mean price for the Neighbourhood group across all room types is shown
+
+**Key Insights:**
+
+* Manhattan has the highest average price per room at $199.5, followed by Brooklyn at $122.9
+* The Bronx is the cheapest with an average of only $85.8 per night
+* All Neighbourhoods appear to have a number of outliers at the $1,000 + price range
+* The Manhattan price average is driven by a a number of key factors. The price of entire home/apts appears to be expensive, but there is a spike in Hotel room costs aroudn the $1,000 a night mark
+* Investors will need to be concious of much lower room incomes if identifying opportunities outside of Manhattan and Brooklyn
+
+
+# **Chart 3: Map of Rooms Across New York**
+
+```{r Map of rooms, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+# Create room type palette
+room_type_color <- colorFactor(c("#173F5F", "#3CAEA3", "#F6D55C", "#ED553B"), domain=c("Entire home/apt", "Hotel room", "Private room", "Shared room"))
+
+# Create new price column to show relative sizes in chart
+ny_airbnb_listings$price_scaled <- 0.001*(ny_airbnb_listings$price)
+
+# Create map output 
+newyork_map <- ny_airbnb_listings %>%
+                leaflet(width = "100%") %>%
+                      addProviderTiles(providers$Stamen.TonerBackground) %>% 
+                      setView(-73.96, 40.72, zoom = 11) %>% 
+                      addCircleMarkers(~longitude, ~latitude, 
+                                       popup=paste("Name:", ny_airbnb_listings$name, "<br>",
+                                                   "Type:", ny_airbnb_listings$room_type, "<br>",
+                                                   "Price:",ny_airbnb_listings$price), 
+                                       weight = 1, radius= ~price_scaled, 
+                      color=~room_type_color(room_type), stroke = F, fillOpacity = 0.4) %>%
+                            addLegend("bottomright", colors= c("#173F5F", "#3CAEA3", "#F6D55C", "#ED553B"), labels=c("Entire home/apt", "Hotel room", "Private room", "Shared room"), title="Room types")
+
+newyork_map
+
+```
+
+
+**Explanation:**
+
+* The map above shows all rooms across New York plotted using their lat/long co-ordinates
+* The rooms are coloured based on room type, being either 'Entire home/apt', 'Hotel room', 'Private room', or 'Shared room'
+* The size of the bubble represents the price per night
+* Labels have been added to each room allowing the user to see exactly the room type and listing price when seelcting a room  to accurately see what else is available in an area they are considering investing in 
+
+**Key Insights:**
+
+* Manhattan has the highest density of Entire home/apt rooms, whilst the map show a much higher skew towards 'Private rooms' in areas such as Brooklyn
+* The density of rooms available also becomes apparent; given the smaller size of Manhattan island there would be much more competition when looking to provide a Airbnb service, compared to parts of Queens and Brooklyn which would appear to be under represented
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
